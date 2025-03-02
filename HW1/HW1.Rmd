@@ -1,0 +1,316 @@
+---
+title: "HW1"
+subtitle: "STAT-340 Applied Regression Method"
+author: "Yerim Oh"
+output: 
+  pdf_document:
+    extra_dependencies: ["bm"]
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Details
+
+### Due Date
+
+This assignment is due at 11:59 PM on the 27th of September.
+
+### Grading
+
+The problems will be graded for correctness. An emphasis will be placed on full explanations of your thought process. You should write complete sentences and make sure the steps can be followed in the proofs.
+
+### Collaboration
+
+You are allowed to work with others on this assignment, but you must complete and submit your own write up. You should not copy large blocks of code or written text from another student.
+
+### Submit in Gradescope
+
+The problems in this assignment require writing mathematical formulas. It can be done directly in RMarkdown using LaTeX coding. For instance, the code:
+
+\begin{verbatim}
+\begin{flalign}
+\frac{d}{dx} f(x) &= \frac{d}{dx} (10 x^2 + e^{3x} - log(x)) \notag \\
+&= (20 x + 3e^{3x} - 1/x). \notag
+\end{flalign}
+\end{verbatim}
+
+results in the following output: \vspace{-12pt}
+
+\begin{flalign}
+\frac{d}{dx} f(x) &= \frac{d}{dx} (10 x^2 + e^{3x} - log(x)) \notag \\
+&= (20 x + 3e^{3x} - 1/x). \notag
+\end{flalign}
+
+You may write your answers up using LaTeX. However, you may write your answers to all problems by hand:
+
+1)  on a tablet or
+
+2)  on a piece of paper, then scan your solutions and include the scan/picture in your Markdown document. The code to include a figure is as follows (from `\begin{figure}` to `\end{figure}`):
+
+    \begin{verbatim}
+     \begin{figure}[!ht]
+     \centering
+     \includegraphics[width=8cm]{NamePicture.png}
+     \end{figure}
+     \end{verbatim}
+
+I prefer you spend time understanding the problems rather than formatting them. Pick the easiest way for you, but make sure your answers are neatly presented and legible.
+
+\newpage
+
+## Problem 1: One-way ANOVA
+
+Suppose you conduct an experiment where a total of $n$ subjects are randomly assigned to one of two groups (control and treatment). For each subject $i$, you record a response variable $y_i$. The model may be written as follows:
+
+$$y_i = \beta_0 + \beta_1 x_i + \varepsilon_i, \quad i = 1,~   \dots~, n,$$ where $x_i = 1$ if the subject was assigned to the treatment group, and $x_i = 0$, in the control group. Suppose that there are $n_1$ subjects in the control group and $n_2$ subjects in the treatment group, such that $n_1 + n_2 = n$.
+
+### (a) Write down the model in matrix form. As part of your answer, please define each matrix and vector carefully. For $\mathbf{X}$, you may assume the first $n_1$ subjects were assigned to the control group and the remaining $n_2$ subjects to the treatment group. Since you don't know the exact values for $n_1$ and $n_2$, you'll likely have to use some dots $\vdots$ in your specification of $\mathbf{X}$ to indicate some rows that you haven't explicitly written down.
+
+$$
+\boldsymbol{Y}=\boldsymbol{X}\cdot\boldsymbol{\beta}+\boldsymbol{\varepsilon}\\
+\begin{bmatrix}
+y_1 \\ \vdots\\
+y_{n_1} \\ y_{n_1+1}\\ \vdots\\
+y_{n_1+n_2}
+\end{bmatrix}
+=
+\begin{bmatrix}
+1 & 0 \\ \vdots & \vdots \\
+1 & 0 \\ 1 & 1 \\
+\vdots & \vdots \\ 1 & 1
+\end{bmatrix}
+\cdot
+\begin{bmatrix}
+\beta_0 \\ \beta_1 \\
+\end{bmatrix}
++
+\begin{bmatrix}
+\varepsilon_1 \\ \varepsilon_2 \\ \vdots\\ \varepsilon_{n}
+\end{bmatrix}
+$$
+
+when $n=n_1+n_2$
+
+\vspace{12pt}
+
+### (b) By working through \underline{matrix calculations}, demonstrate that \boldmath$\hat{\beta} =$ $(\hat{\beta}_0, \hat{\beta}_1)' = (\bar{y}_1, \bar{y}_2 - \bar{y}_1)',$ where $\bar{y}_1 = \frac{1}{n_1} \sum_{i = 1}^{n_1} y_i$ and $\bar{y}_2 = \frac{1}{n_2} \sum_{i = n_1+1}^{n} y_i$.
+
+We know that $\hat{\boldsymbol{\beta}} = (\boldsymbol{X'} \boldsymbol{X})^{-1} \boldsymbol{X'}\boldsymbol{y}$
+
+$$
+\begin{aligned}
+\boldsymbol{X'} \boldsymbol{X}
+&= \begin{bmatrix}
+1 & \cdots & 1 & 1 & \cdots & 1 \\
+0 & \cdots & 0 & 1 & \cdots & 1 \\
+\end{bmatrix} \cdot
+\begin{bmatrix}
+1 & 0 \\ \vdots & \vdots \\ 1 & 0 \\
+1 & 1 \\ \vdots & \vdots \\ 1 & 1 \\
+\end{bmatrix} \\
+&=
+\begin{bmatrix}
+1 + \cdots + 1 + 1 + \cdots + 1 & 0 + \cdots + 0 + 1 + \cdots + 1\\
+0 + \cdots + 0 + 1 + \cdots + 1 & 0 + \cdots + 0 + 1 + \cdots + 1 \\
+\end{bmatrix} \\
+&= \begin{bmatrix}
+1 \cdot (n_1+n_2) & 1 \cdot n_2 \\
+1 \cdot n_2 & 1 \cdot n_2 \\
+\end{bmatrix} =
+\begin{bmatrix}
+n_1+n_2 & n_2 \\
+n_2 & n_2 \\
+\end{bmatrix}
+\end{aligned}
+$$
+
+$$
+\begin{aligned}
+(\boldsymbol{X'} \boldsymbol{X})^{-1}
+&= \frac{1}{(n_1+n_2)n_2-(n_2)^2}
+\begin{bmatrix}
+n_2 & -n_2 \\
+-n_2 & n_1+n_2 \\
+\end{bmatrix} \\
+&= \frac{1}{n_1n_2}
+\begin{bmatrix}
+n_2 & -n_2 \\
+-n_2 & n_1+n_2 \\
+\end{bmatrix} \\
+&= \begin{bmatrix}
+\frac{1}{n_1} & -\frac{1}{n_1} \\
+-\frac{1}{n_1} & \frac{n_1+n_2}{n_1n_2} \\
+\end{bmatrix} =
+\begin{bmatrix}
+\frac{1}{n_1} & -\frac{1}{n_1} \\
+-\frac{1}{n_1} & \frac{1}{n_1}+\frac{1}{n_2} \\
+\end{bmatrix}
+\end{aligned}
+$$
+
+$$
+\begin{aligned}
+(\boldsymbol{X'} \boldsymbol{X})^{-1} \boldsymbol{X'} &=
+\begin{bmatrix}
+\frac{1}{n_1} & -\frac{1}{n_1} \\
+-\frac{1}{n_1} & \frac{1}{n_1}+\frac{1}{n_2} \\
+\end{bmatrix}
+\begin{bmatrix}
+1 & \cdots & 1 & 1 & \cdots & 1 \\
+0 & \cdots & 0 & 1 & \cdots & 1 \\
+\end{bmatrix} \\
+&= \begin{bmatrix}
+\frac{1}{n_1} & \cdots & \frac{1}{n_1} & 0 & \cdots & 0 \\
+-\frac{1}{n_1} & \cdots & -\frac{1}{n_1} & \frac{1}{n_2} & \cdots & \frac{1}{n_2} \\
+\end{bmatrix}
+\end{aligned}
+$$
+
+$$
+\begin{aligned}
+\hat{\boldsymbol{\beta}}
+&= (\boldsymbol{X'} \boldsymbol{X})^{-1} \boldsymbol{X'}\boldsymbol{y} \\
+&= \begin{bmatrix}
+\frac{1}{n_1} & \cdots & \frac{1}{n_1} & 0 & \cdots & 0 \\
+-\frac{1}{n_1} & \cdots & -\frac{1}{n_1} & \frac{1}{n_2} & \cdots & \frac{1}{n_2} \\
+\end{bmatrix}
+\begin{bmatrix} y_1 \\ \vdots\\
+y_{n_1} \\ y_{n_1+1}\\ \vdots\\
+y_{n_1+n_2} \end{bmatrix} \\
+&= \begin{bmatrix}
+\frac{1}{n_1}y_1 + \cdots + \frac{1}{n_1}y_{n_1} + 0 + \cdots + 0 \\
+-\frac{1}{n_1}y_1 + \cdots + -\frac{1}{n_1}y_{n_1} +
+\frac{1}{n_2}(y_{n_1+1}) + \cdots + \frac{1}{n_2}(y_{n_1+n_2}) \\
+\end{bmatrix} \\
+&= \begin{bmatrix}
+\frac{1}{n_1}(y_1 + \cdots + y_{n_1}) \\
+-\frac{1}{n_1}(y_1 + \cdots + y_{n_1}) + \frac{1}{n_2}(y_{n_1+1} + \cdots + y_{n_1+n_2}) \\
+\end{bmatrix} \\
+&= \begin{bmatrix}
+\frac{1}{n_1} \sum_{i=1}^{n_1} y_i \\
+-\frac{1}{n_1} \sum_{i=1}^{n_1} y_i + \frac{1}{n_2} \sum_{i=n_1+1}^{n_1+n_2} y_i \\
+\end{bmatrix} \\
+&= \begin{bmatrix}
+\bar{y_1}\\
+\bar{y_2} - \bar{y_1} \\
+\end{bmatrix}
+= \begin{bmatrix}
+\hat{\beta_0}\\
+\hat{\beta_1} \\
+\end{bmatrix}
+\end{aligned}
+$$
+
+\vspace{12pt}
+
+### (c) Interpret the coefficient $\beta_0$.
+
+The average response variable of the subject in the control group.
+
+\vspace{12pt}
+
+### (d) Interpret the coefficient $\beta_1$.
+
+For the subject in the treatment group, the average response variable increases by $\beta_1$ on average.
+
+\vspace{24pt}
+
+## Problem 2: Unique solution for $\hat{\beta}$
+
+Assume you observe four response variables, $y_{i}$, for $i = 1,..., 4$. Further assume the model for the four observations can be written as follows:
+
+\begin{flalign}
+y_{1} &= \beta_0 + \varepsilon_1 \notag\\
+y_{2} &= \beta_0 + \beta_1 + \varepsilon_2, \notag\\
+y_{3} &= \beta_0 + \beta_2 + \varepsilon_3, \notag\\
+y_{4} &= \beta_0 + \beta_1+ \beta_2 + \varepsilon_4,\notag
+\end{flalign}
+
+and $E\left(\varepsilon_i\right)=0 \text { and } \operatorname{Var}\left(\varepsilon_i\right)=\sigma^2$.
+
+### a) Assuming \boldmath$\beta$ $= (\beta_0, \beta_1, \beta_2)'$, determine the design matrix \boldmath$X$ for that model.
+
+$$
+\boldsymbol{X} =
+\begin{bmatrix}
+1 & 0 & 0 \\
+1 & 1 & 0 \\
+1 & 0 & 1 \\
+1 & 1 & 1 \\
+\end{bmatrix}
+$$
+
+\vspace{12pt}
+
+### b) Discuss whether or not there exists a unique solution for, $\hat{\bm{\beta}}$, that minimizes $(\bm{y}-\bm{X\beta})'(\bm{y}-\bm{X\beta})$. Justify your answer.
+
+Model in matrix form:
+
+$$
+\begin{bmatrix}
+y_1 \\ y_2 \\ y_3 \\ y_4 \\
+\end{bmatrix}
+=
+\begin{bmatrix}
+1 & 0 & 0 \\
+1 & 1 & 0 \\
+1 & 0 & 1 \\
+1 & 1 & 1 \\
+\end{bmatrix}
+\cdot
+\begin{bmatrix}
+\beta_0 \\ \beta_1 \\ \beta_2 \\
+\end{bmatrix}
++
+\begin{bmatrix}
+\varepsilon_1 \\ \varepsilon_2 \\ \varepsilon_3 \\ \varepsilon_4
+\end{bmatrix}
+$$
+
+To have a unique solution $\hat{\beta}$ that minimizes $(\boldsymbol{y}-\boldsymbol{X}\boldsymbol{\beta})'(\boldsymbol{y}-\boldsymbol{X}\boldsymbol{\beta})$, the matrix $\boldsymbol{X}'\boldsymbol{X}$ should be invertible.
+
+$$
+\boldsymbol{X}' =
+\begin{bmatrix}
+1 & 1 & 1 & 1 \\
+0 & 1 & 0 & 1\\
+0 & 0 & 1 & 1\\
+\end{bmatrix}
+\\
+\begin{aligned}
+\boldsymbol{X}' \boldsymbol{X} &=
+\begin{bmatrix}
+1 & 1 & 1 & 1 \\
+0 & 1 & 0 & 1\\
+0 & 0 & 1 & 1\\
+\end{bmatrix}
+\cdot
+\begin{bmatrix}
+1 & 0 & 0 \\
+1 & 1 & 0 \\
+1 & 0 & 1 \\
+1 & 1 & 1 \\
+\end{bmatrix} \\
+&= \begin{bmatrix}
+4 & 2 & 2 \\
+2 & 2 & 1 \\
+2 & 1 & 2 \\
+\end{bmatrix}
+\end{aligned}
+$$
+
+Then, check whether $det(\boldsymbol{X}'\boldsymbol{X}) \neq 0$ to determine if $\boldsymbol{X}'\boldsymbol{X}$ is invertible.
+
+$$
+\begin{aligned}
+det(\boldsymbol{X}'\boldsymbol{X}) &= 4(2\cdot2-1\cdot1) - 2(2\cdot2-1\cdot2) + 2(2\cdot1-2\cdot2) \\
+&= 12 - 4 + (-4) \\
+&= 4
+\end{aligned}
+$$
+
+Since $det(\boldsymbol{X}'\boldsymbol{X}) = 4 \neq 0$, $\boldsymbol{X}'\boldsymbol{X}$ is invertible.
+
+Therefore, there exists a unique solution $\hat{\beta}$ that minimizes $(\boldsymbol{y}-\boldsymbol{X}\boldsymbol{\beta})'(\boldsymbol{y}-\boldsymbol{X}\boldsymbol{\beta})$.

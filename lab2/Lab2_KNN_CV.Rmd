@@ -1,0 +1,216 @@
+---
+title: "K-Nearest Neighbors and Cross-Validation"
+subtitle: "CH5. Cross Validation"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r packages, warning =FALSE, message = FALSE, include = FALSE}
+# Load some packages
+library(caret)
+library(ISLR)
+library(ggplot2)
+library(dplyr)
+library(gridExtra)
+```
+
+The Auto was taken from the StatLib library which is maintained at Carnegie Mellon University. The dataset was used in the 1983 American Statistical Association Exposition. The original dataset has 397 observations, of which 5 have missing values for the variable "horsepower". These rows are removed here.
+
+# Read in data and take a look
+
+```{r load data}
+cars <- Auto  # data loaded in the ISLR package
+head(cars,3)  # take a look
+```
+
+Use the following approaches to determine the number of nearest neighbors ($K$) to use in the KNN regression method:
+
+-   Validation set method
+-   10-fold Cross-Validation
+
+You may get some inspiration for the steps to follow from "CrossValidation_RCode.Rmd".
+
+# Validation-set approach
+
+## Step 1: Getting a train/test split.
+
+```{r training testing sets}
+# Set seed for reproducibility
+set.seed(7304)
+
+#  Divide into training and test sets
+train_inds <- caret::createDataPartition(
+  y = cars$mpg, # response variable as a vector
+  p = 0.5       # approx. proportion of data used for training
+)
+
+# train_inds: indices of selected observations for training set
+head(train_inds, 10)
+
+# Create the training and test data sets
+cars_train <- cars %>% slice(train_inds[[1]])
+cars_test  <- cars %>% slice(-train_inds[[1]])
+```
+
+## Summary of what we've achieved so far:
+
+```{r, fig.height=3.5}
+# number of observations in each data sets
+nrow(cars)
+nrow(cars_train)
+nrow(cars_test)
+
+# plot of the data
+ggplot() +
+  geom_point(data = cars_train, 
+             mapping = aes(x = weight, y = mpg), 
+             color = "magenta4", shape = 18, size =2) +
+  geom_point(data = cars_test, 
+             mapping = aes(x = weight, y = mpg), 
+             color = "blue", shape = 4, size =2) +
+  theme_bw()
+```
+
+\newpage
+
+## Step 2: Fit all candidate models to the training data and compare performance on test data.
+
+Here, we get validation set MSE for each candidate model:
+
+```{r}
+K_neighbors <- c(1, 3, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 100)
+length(K_neighbors)
+
+results_mse <- data.frame(
+  K_neighbors = K_neighbors,
+  train_mse = NA,
+  test_mse = NA
+)
+
+# For loops: 
+for(i in 1:length(K_neighbors)) {
+  
+  # fit to training set
+  knn_fit <- train(form = mpg ~ weight,
+                   data = cars_train,
+                   method = "knn",
+                   trControl = trainControl(method = "none"),
+                   tuneGrid = data.frame(k = K_neighbors[i]))
+
+  # by default, predictions are for training set
+  # get residuals and mse for training set
+  train_resids <- cars_train$mpg - predict(knn_fit)
+  results_mse$train_mse[i] <- mean(train_resids^2)
+  # get residuals and mse for test set
+  test_resids <- cars_test$mpg - predict(knn_fit, newdata = cars_test)
+  results_mse$test_mse[i] <- mean(test_resids^2)
+}
+data.frame(K_neighbors, results_mse$test_mse)
+```
+
+$K=25$ has the lowest $MSE_{te}$.
+
+## Here's a plot of the results:
+
+```{r, fig.height=3.5}
+# Code to find the limits of the y axis (not required)
+mse_all   <- c(results_mse$train_mse, results_mse$test_mse)
+plot_ylim <- c(floor(min(mse_all)*4)/4, ceiling(max(mse_all)*4)/4)
+
+# Make plots of the results!
+p1 <- ggplot(data = results_mse, 
+       mapping = aes(x = K_neighbors, y = test_mse)) +
+  geom_line(color="blue") +
+  geom_point(color="blue") + 
+  ylim(plot_ylim) + 
+  theme_bw()
+
+p2 <- ggplot(data = results_mse, 
+       mapping = aes(x = K_neighbors, y = train_mse)) +
+  geom_line(color="blue") + geom_point(color="blue") + 
+  ylim(plot_ylim) + 
+  theme_bw()
+  
+grid.arrange(p1,p2,ncol= 2)
+```
+
+For KNN method, the smaller number of neighbors make the model to be more complex than the larger number of neighbors.
+
+\vspace{36pt}
+
+# 10-fold Cross-Validation
+
+## Step 1: Split into training and test sets, obtain validation folds
+
+```{r}
+# Set seed for reproducibility
+set.seed(7304) # generated at random.org
+
+# Generate partition of the 10 folds
+# The result is a list of length 10 with indices of observations to include in each fold.
+num_crossval_folds <- 10
+cross_fold_inds <- caret::createFolds(
+  y = cars$mpg,    # response variable as a vector
+  k = num_crossval_folds # number of folds for CV
+)
+```
+
+## Step 2: Get performance for each fold, using the other folds put together as a training set.
+
+```{r}
+# Object to store the results
+results_mse <- expand.grid(
+  K_neighbors = K_neighbors,
+  fold_num    = seq_len(num_crossval_folds),
+  train_mse = NA,
+  test_mse = NA
+)
+# For loops: 
+#    13 different number of neighbors (outside loop)
+#    10 model fits for the 10 folds (inside loop)
+
+for(i in 1:length(K_neighbors))  { # K neighbors
+  for(fold_num in seq_len(num_crossval_folds)) { # folds
+    
+    # Index where to store results
+    results_index <- which(
+      results_mse$K_neighbors == K_neighbors[i] &
+      results_mse$fold_num == fold_num
+    )
+    
+    # Training and testing sets (depends on the fold)
+    cars_train <- cars %>% slice(-cross_fold_inds[[fold_num]])
+    cars_test  <- cars %>% slice(cross_fold_inds[[fold_num]])
+    
+    # Fit model to training data (depends on the degree)
+    knn_fit2 <- train(form = mpg ~ weight, data = cars_train,
+                      method = "knn",
+                      trControl = trainControl(method = "none"),
+                      tuneGrid = data.frame(k = K_neighbors[i]))
+
+    # get residuals and mse for training set
+    train_resids <- cars_train$mpg - predict(knn_fit2)
+    results_mse$train_mse[results_index] <- mean(train_resids^2)
+    # get residuals and mse for test set
+    test_resids <- cars_test$mpg - predict(knn_fit2, cars_test)
+    results_mse$test_mse[results_index] <- mean(test_resids^2)
+  }
+}
+head(results_mse)
+```
+
+```{r}
+# summarize the results from cross validation
+# need to take the average mse for the k folds
+summarized_crossval_mse_results <- results_mse %>%
+  group_by(K_neighbors) %>%
+  summarize(
+    crossval_mse = mean(test_mse)
+  )
+summarized_crossval_mse_results
+```
+
+$K=40$ has the lowest $MSE_{te}$.

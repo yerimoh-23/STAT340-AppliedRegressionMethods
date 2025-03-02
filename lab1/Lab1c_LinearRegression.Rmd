@@ -1,0 +1,115 @@
+---
+title: "Lab 1c. Linear Regression"
+subtitle: "ISL Chapter 3"
+author: "Yerim Oh"
+output: pdf_document
+header-includes:
+   - \usepackage{soul}
+geometry: margin=0.6in
+---
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(eval = TRUE)
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(mosaic)
+```
+
+## Example
+
+The Auto was taken from the StatLib library which is maintained at Carnegie Mellon University. The dataset was used in the 1983 American Statistical Association Exposition. The original dataset has 397 observations, of which 5 have missing values for the variable "horsepower". These rows are removed here.
+
+```{r, echo=FALSE, message = FALSE,fig.height=5}
+library(GGally)
+library(ISLR2)
+ggpairs(Auto %>% select(mpg, cylinders, weight)) + 
+  theme_bw()
+```
+
+\newpage
+
+### 1. Fit a model for `mpg` using `cylinders`, `weight` as explanatory variables. Print a summary.
+
+```{r}
+m1_fit <- lm(mpg ~ cylinders+weight, Auto)
+summary(m1_fit)
+```
+
+### 2. Estimate the coefficients for the effect of `cylinders` on `mpg` both manually and using R pre-built functions.
+
+```{r}
+# pre-built function
+m1_fit$coefficients
+
+# manually
+X <- model.matrix(m1_fit)
+y <- matrix(Auto$mpg)
+beta_hat <- solve( t(X) %*% X) %*% t(X) %*% y
+beta_hat
+```
+
+### 3. We have that $\widehat{\text{Cov}}[\hat{\beta}]=\hat{\sigma}^2\left(X^{\prime} X\right)^{-1}$, where $\hat{\sigma}^2 = \frac{1}{n-p-1}  \hat{\varepsilon}^{\prime} \hat{\varepsilon}$. Calculate $\hat{\sigma}^2$.
+
+$\hat{\varepsilon}^T\hat{\varepsilon} = \hat{\varepsilon_1}^2 + \cdots + \hat{\varepsilon_n}^2$
+
+```{r}
+ei <- m1_fit$residuals
+n <- nrow(Auto)
+p <- 2
+sigma2_hat <- sum(ei^2)/(n-p-1)
+sigma2_hat
+```
+
+### 4. We have that $\widehat{\text{Cov}}[\hat{\beta}]=\hat{\sigma}^2\left(X^{\prime} X\right)^{-1}$, where $\hat{\sigma}^2 = \frac{1}{n-p-1}  \hat{\varepsilon}^{\prime} \hat{\varepsilon}$. Calculate $\widehat{\text{Cov}}[\hat{\beta}]$. Find $SE(\hat{\beta}_{1})$.
+
+```{r}
+# covariance
+CovBetas <- sigma2_hat * (solve(t(X) %*% X))
+CovBetas
+
+# SE
+SE_Beta1 <- sqrt(diag(CovBetas))
+SE_Beta1[2] # only get the cylinders part
+```
+
+### 5. Calculate a 95% confidence interval for the effect of`cylinders` on `mpg` using the value of $SE(\hat{\beta}_{1})$ you found in part 4. Compare your answer with the confidence interval found using the `confint()` function. Give an interpretation of this confidence interval.
+
+```{r}
+# pre-built function
+confint(m1_fit)[2,]
+
+# manually
+beta1_fat <- beta_hat[2]
+CI_beta_lower <- beta1_fat - qt(p = 0.975, df = n-p-1) * SE_Beta1[2]
+CI_beta_upper <- beta1_fat + qt(p = 0.975, df = n-p-1) * SE_Beta1[2]
+print(c(CI_beta_lower, CI_beta_upper))
+```
+
+**Interpretation**
+
+We are 95% confident that one additional cylinder will decrease the average estimated mean miles per gallon by an amount between 0.15 and 1.29, while the other variables are constant. By 95% confident, we mean that for 95% of the samples, a confidence interval calculated in this way will include the true effect of `cylinders` on `mpg`.
+
+### 6. Calculate a 95% confidence interval for`mpg` for a car with 4 cylinders which weigh 2300 pounds. Give an interpretation of this confidence interval.
+
+```{r}
+newdata0 <- data.frame(
+  cylinders = 4,
+  weight = 2300
+)
+predict(m1_fit, newdata = newdata0, interval = "confidence")
+```
+
+**Interpretation**
+
+We are 95% confident that the estimated mean miles per gallon for a car with 4 cylinders which weigh 2300 pounds is between 28.24 and 29.37. By 95% confident, we mean that for 95% of the samples, a confidence interval calculated in this way will include the true estimated mean miles per gallon for a car with those characteristics.
+
+### 7. Calculate a 95% prediction interval for`mpg` for a car with 4 cylinders which weigh 2300 pounds. Give an interpretation of this prediction interval.
+
+```{r}
+predict(m1_fit, newdata = newdata0, interval = "prediction")
+```
+
+**Interpretation**
+
+We are 95% confident that a future observation of the estimated mean miles per gallon for a car with 4 cylinders which weigh 2300 pounds is between 20.33 and 37.29. For 95% of samples and 95% of future observations cars with those characteristics, a prediction interval calculated in this way will contain the `mpg` for those new observations.

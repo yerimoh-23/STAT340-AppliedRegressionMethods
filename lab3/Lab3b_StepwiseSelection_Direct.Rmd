@@ -1,0 +1,212 @@
+---
+title: "Best Subset Regression - R Code"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ISLR2)
+library(leaps)
+library(GGally)
+library(ggplot2)
+library(gridExtra)
+library(dplyr)
+library(caret)
+library(stringr)
+```
+
+# Best subset regression
+
+**Example** Dataset `Hitters` in ISLR2 package. Major League Baseball Data from the 1986 and 1987 seasons.
+
+References James, G., Witten, D., Hastie, T., and Tibshirani, R. (2013) An Introduction to Statistical Learning with applications in R, <https://www.statlearning.com>, Springer-Verlag, New York
+
+## Load and look at the data
+
+```{r, warning=FALSE, message=FALSE, echo = FALSE}
+Hitters    <- na.omit(Hitters) # Eliminate all rows with NAs
+Hitters_tr <- Hitters %>% mutate(Years_tr = log(Years),
+                                 CAtBat_tr = log(CAtBat),
+                                 CHits_tr = log(CHits),
+                                 CHmRun_tr = log(CHmRun+1),
+                                 CRuns_tr  = log(CRuns),
+                                 CRBI_tr   = log(CRBI),
+                                 CWalks_tr = log(CWalks),
+                                 Salary_tr = log(Salary))
+Hitters_tr <- Hitters_tr %>% select(!c(Years,CAtBat,CHmRun,CRuns,CRBI,CWalks,Salary, CHits,
+                                       League, Division,NewLeague))
+dim(Hitters_tr)
+head(Hitters_tr)
+```
+
+\newpage
+
+```{r, warning=FALSE, message=FALSE, echo = FALSE}
+p1 <-  ggplot(Hitters_tr, aes(y = Salary_tr, x = AtBat)) + geom_point() + theme_bw()
+p2 <-  ggplot(Hitters_tr, aes(y = Salary_tr, x = Hits))  + geom_point() + theme_bw()
+p3 <-  ggplot(Hitters_tr, aes(y = Salary_tr, x = HmRun)) + geom_point() + theme_bw()
+p4 <-  ggplot(Hitters_tr, aes(y = Salary_tr, x = Runs))  + geom_point() + theme_bw()
+p5 <-  ggplot(Hitters_tr, aes(y = Salary_tr, x = RBI))   + geom_point() + theme_bw()
+p6 <-  ggplot(Hitters_tr, aes(y = Salary_tr, x = Walks)) + geom_point() + theme_bw()
+p7 <-  ggplot(Hitters_tr, aes(y = Salary_tr, x = Years_tr)) + geom_point() + theme_bw()
+p8 <-  ggplot(Hitters_tr, aes(y = Salary_tr, x = CAtBat_tr)) + geom_point() + theme_bw()
+p9 <-  ggplot(Hitters_tr, aes(y = Salary_tr, x = CHits_tr))   + geom_point() + theme_bw()
+p10 <- ggplot(Hitters_tr, aes(y = Salary_tr, x = CHmRun_tr)) + geom_point() + theme_bw()
+p11 <- ggplot(Hitters_tr, aes(y = Salary_tr, x = CRuns_tr)) + geom_point() + theme_bw()
+p12 <- ggplot(Hitters_tr, aes(y = Salary_tr, x = CRBI_tr)) + geom_point() + theme_bw()
+p13 <- ggplot(Hitters_tr, aes(y = Salary_tr, x = CWalks_tr))   + geom_point() + theme_bw()
+p14 <- ggplot(Hitters_tr, aes(y = Salary_tr, x = PutOuts)) + geom_point() + theme_bw()
+p15 <- ggplot(Hitters_tr, aes(y = Salary_tr, x = Assists))   + geom_point() + theme_bw()
+p16 <- ggplot(Hitters_tr, aes(y = Salary_tr, x = Errors)) + geom_point() + theme_bw()
+
+grid.arrange(p1,p2,p3,p4,p5,p6,p7,p8,
+             p9,p10,p11,p12,p13,p14,p15,p16,
+             ncol = 4)
+```
+
+## Forward stepwise selection
+
+Here we use the `regsubsets` function but specify the `method="forward"` option.
+
+```{r, warning=FALSE, message=FALSE,fig.height=2.5}
+# Identify the models to compare with forward stepwise selection method
+regfit.fwd <- regsubsets(Salary_tr ~., data = Hitters_tr,nvmax = 16, method = "forward")
+summary(regfit.fwd)
+```
+
+\newpage
+
+## Model Selection Using a Validation Set
+
+Lets make a training and validation set, so that we can choose a good subset model.
+
+```{r}
+# Split the data train/test
+set.seed(598384)
+train_inds <- caret::createDataPartition(
+  y = Hitters_tr$Salary_tr, # response variable as a vector
+  p = 2/3                   # approx. proportion of data used for training
+)
+# Create the training and test data sets
+Hitters_train <- Hitters_tr %>% slice(train_inds[[1]])
+Hitters_test  <- Hitters_tr %>% slice(-train_inds[[1]])
+```
+
+Now we will train the models found with the forward selection with the train data and make predictions on the observations not used for training. We know there are 16 models, so we set up some vectors to record the errors.
+
+```{r, warning=FALSE, message=FALSE,fig.height=2.5}
+val.errors <- rep(NA, 16)
+
+for (i in 1:16){
+  # Fit the model 
+  coefs <- coef(regfit.fwd, i)
+  nams <- names(coefs)
+  nams <- nams[!nams %in% "(Intercept)"] # exclude the intercept
+  
+  # want to do model fit -> get the names of the variables that will be fitted
+  form <- as.formula(paste("Salary_tr", paste(nams, collapse = " + "), sep = " ~ "))
+  red_model <- lm(form, data = Hitters_train)
+  
+  # Get estimated test MSE
+  pred = predict(red_model, Hitters_test) # prediction using the test data
+  val.errors[i] = mean((Hitters_test$Salary_tr - pred)^2)
+}
+res_MSE <- data.frame(model = seq(1:16), MSE = val.errors)
+ggplot(res_MSE, aes(x= model, y  = MSE)) + 
+  geom_point() + geom_line() + theme_bw()
+```
+
+The first model is the model we are going to use, since the MSE of the test data is the lowest for the first model.
+
+As we expected, the testing error does not go down monotonically as the model gets bigger.
+
+#### Get coefficients of "Best models"
+
+```{r}
+# The best model based on MSE test is the one with 1 variables
+coef(regfit.fwd, 1)
+```
+
+## Model Selection Using Cross Validation
+
+Repeat the exercise above replacing the Validation set approach with a CV 5-fold.
+
+### Step 1: Split into training and test sets, obtain validation folds
+
+```{r}
+# Set seed for reproducibility
+set.seed(7304)
+
+# Generate partition of the 5 folds
+# The result is a list of length 5 with indices of observations to include in each fold.
+num_crossval_folds <- 5
+cross_fold_inds <- caret::createFolds(
+  y = Hitters_tr$Salary_tr,    # response variable as a vector
+  k = num_crossval_folds # number of folds for CV
+)
+```
+
+### Step 2: Get performance for each fold, using the other folds put together as a training set.
+
+```{r}
+# Object to store the results
+results_mse <- expand.grid(
+  coef_num = seq_len(16),
+  fold_num    = seq_len(num_crossval_folds),
+  test_mse    = NA
+)
+# For loops: 
+#    16 models from the forward stepwise selection (outside loop)
+#    5 model fits for the 5 folds (inside loop)
+
+for(coef_num in seq_len(16)) { # models
+  for(fold_num in seq_len(num_crossval_folds)) { # folds
+    
+    # Index where to store results
+    results_index <- which(
+      results_mse$coef_num == coef_num &
+      results_mse$fold_num == fold_num
+    )
+    
+    # Training and testing sets (depends on the fold)
+    Hitters_train <- Hitters_tr %>% slice(-cross_fold_inds[[fold_num]])
+    Hitters_test  <- Hitters_tr %>% slice(cross_fold_inds[[fold_num]])
+    
+    # Fit the model
+    coefs <- coef(regfit.fwd, coef_num)
+    nams <- names(coefs)
+    nams <- nams[!nams %in% "(Intercept)"] # exclude the intercept
+    form <- as.formula(paste("Salary_tr", paste(nams, collapse = " + "), sep = " ~ "))
+    fit <- lm(form, data = Hitters_train)
+    
+    # Get estimated test MSE
+    pred = predict(fit, Hitters_test)
+    results_mse$test_mse[results_index] = mean((Hitters_test$Salary_tr - pred)^2)
+  }
+}
+head(results_mse)
+```
+
+```{r}
+# summarize the results from cross validation
+# need to take the average mse for the k folds
+summarized_crossval_mse_results <- results_mse %>%
+  group_by(coef_num) %>%
+  summarize(
+    crossval_mse = mean(test_mse)
+  )
+summarized_crossval_mse_results
+
+# plot the MSE test
+ggplot(summarized_crossval_mse_results, aes(x= coef_num, y  = crossval_mse)) + 
+  geom_point() + geom_line() + theme_bw()
+```
+
+These results suggest that the model with 3 coefficient variables have the lowest MSE.
+
+#### Get coefficients of "Best models"
+
+```{r}
+# The best model based on MSE test is the one with 3 variables
+coef(regfit.fwd, 3)
+```

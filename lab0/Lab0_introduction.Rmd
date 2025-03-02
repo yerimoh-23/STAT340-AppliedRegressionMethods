@@ -1,0 +1,77 @@
+---
+title: "20240904_lab0"
+author: "Yerim Oh"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(dplyr)
+```
+
+## Beer example
+
+In this lab, "we examine data from sixteen student volunteers at Ohio State University who each drank a randomly assigned number of cans of beer. These students were evenly divided between men and women, and they differed in weight and drinking habits. Thirty minutes later, a police officer measured their blood alcohol content (BAC) in grams of alcohol per deciliter of blood."[1,2]
+
+References:
+
+(1) Diez, David M., Christopher D. Barr, and Mine Cetinkaya-Rundel. OpenIntro statistics. Boston, MA, USA. OpenIntro, 2012.
+(2) J. Malkevitch and L.M. Lesser. For All Practical Purposes: Mathematical Literacy in Today's World. WH Freeman & Co, 2008.
+
+```{r, echo= FALSE}
+#The data:
+beer <- structure(list(beers = c(5L,2L,9L,8L,3L,7L,3L,5L,3L,5L,4L,6L,5L,7L,1L,4L),
+                       bac = c(0.10000000000000001,0.029999999999999999, 0.19, 0.12,
+                               0.040000000000000001, 0.095000000000000001, 
+                               0.070000000000000007, 0.059999999999999998, 0.02,
+                               0.050000000000000003, 0.070000000000000007,
+                               0.10000000000000001, 0.085000000000000006,
+                               0.089999999999999997, 0.01, 0.050000000000000003)),
+                  row.names = c(NA, -16L), class = c("tbl_df", "tbl", "data.frame"))
+```
+
+### a) What are the response and explanatory variables?
+
+response variable: blood alcohol content (BAC) in grams of alcohol per deciliter of blood
+
+explanatory variable: number of cans of beer
+
+### b) Plot the data and describe the relationship between the variables.
+
+```{r, error = TRUE}
+ggplot(data = beer, mapping = aes(x = beers, y = bac)) + 
+  geom_point() +
+  theme_bw()
+```
+
+### c) Which function $f$ could describe the relationship between $X$ and $Y$?
+
+A linear relationship seems appropriate.
+
+Estimated equation of the line: $f$(beers) $=\beta_0 + \beta_1 \times$ beers
+
+### d) How could we estimate this function (name the method or code it in the following R chunk)?
+
+Method of Least Squares
+
+$\hat{f}(\text{beers}) = -0.0127+0.01796 \times \text{beers}$
+
+```{r}
+# fit the model
+beer_model <- lm(bac ~ beers, data = beer)
+summary(beer_model)
+
+# plot the linear function: 2 ways
+plot(beer$beers, beer$bac,
+     xlab = "num of cans", ylab = "BAC",
+     pch = 19, frame = FALSE)
+abline(beer_model, col = "blue")
+
+beer <- beer %>%
+  mutate(fitted = predict(beer_model))
+ggplot() +
+  geom_point(data = beer, mapping = aes(x = beers, y = bac)) +
+  geom_line(data = beer, mapping = aes(x = beers, y = fitted), color = "blue") +
+  theme_bw()
+```

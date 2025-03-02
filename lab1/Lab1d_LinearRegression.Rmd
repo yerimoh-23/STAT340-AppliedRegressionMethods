@@ -1,0 +1,89 @@
+---
+title: "Lab 1d. Linear Regression"
+subtitle: "Interaction between two quantitative variables"
+author: "Yerim Oh"
+output: pdf_document
+header-includes:
+   - \usepackage{soul}
+geometry: margin=0.6in
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(dplyr)
+```
+
+The purpose of this lab is to study the interaction between two quantitative variables. We will do this through a simulation study.
+
+### a) Use the following code to simulate data about income based on education and seniority.
+
+```{r}
+set.seed(321)
+n         <- 50
+seniority <- trunc(rexp(n,.15)*12)/12
+educ      <- trunc(runif(50,10,22)*2)/2
+income    <- -30 + 4.5 * educ + 1.3 * seniority +  .2 * educ * seniority + rnorm(n,0, 1.5)
+simdata   <- data.frame(income = income, educ = educ, seniority =seniority)
+```
+
+### b) Examine the first few rows of the simdata dataframe.
+
+```{r}
+head(simdata)
+```
+
+-   explanatory variable: `educ`, `seniority`
+
+-   response variable: `income`
+
+### c) Write down a model for the data that includes both variables and an interaction.
+
+$Y = \beta_0 + \beta_1 \text{seniority} + \beta_2 \text{education} + \beta_3 \text{seniority} \times \text{education} + \varepsilon$
+
+### d) Fit the model for the model in part c) and print the summary().
+
+```{r, error=TRUE}
+model_fit  <- lm(formula = income ~ seniority + educ + seniority * educ, data = simdata)
+summary(model_fit)
+```
+
+### e) Write the equation for the predicted value of $Y$ based on the model fit in d).
+
+$\hat{Y} = -30.81 + 1.33 \cdot\text{seniority} + 4.56 \cdot\text{education} + 0.20 \cdot\text{seniority} \times \text{education}$
+
+### f) Extract the estimated coefficients from the model fit using the function coef()
+
+```{r, error=TRUE}
+(coef_wi  <- coef(model_fit))
+```
+
+### g) Using the estimated coefficients and the mutate function, add 3 variables to the simdata dataframe: the predicted values for the income based on the observed value for educ, but assuming
+
+(i) seniority is equal to 1
+(ii) seniority is equal to 10
+(iii) seniority is equal to 20
+
+```{r, error=TRUE}
+simdata <- simdata %>% 
+  mutate(yhat_s1  = coef_wi[1] + coef_wi[2]*1 + coef_wi[3]*educ + coef_wi[4]*1*educ,
+         yhat_s2  = coef_wi[1] + coef_wi[2]*10 + coef_wi[3]*educ + coef_wi[4]*10*educ,
+         yhat_s3  = coef_wi[1] + coef_wi[2]*20 + coef_wi[3]*educ + coef_wi[4]*20*educ)
+```
+
+### h) Plot the estimated lines of income vs educ for the three levels of seniority.
+
+\textcolor{white}{1}
+
+```{r, error=TRUE}
+ggplot(simdata, aes(x=educ, income)) +
+  geom_point() + 
+  geom_line(aes(y = yhat_s1), col="red") +
+  geom_line(aes(y = yhat_s2), col="blue") +
+  geom_line(aes(y = yhat_s3), col="green") +
+  theme_bw()
+```
+
+### i) Based on this exercise, explain in your own words why is the interpretation of the coefficients not straightforward when there is an interaction between two quantitative variables in the model.
+
+We have a different slopes for education for every value of seniority (infinite number of slopes)

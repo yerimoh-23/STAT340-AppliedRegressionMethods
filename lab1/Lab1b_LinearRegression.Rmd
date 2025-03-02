@@ -1,0 +1,86 @@
+---
+title: "Lab 1b. Linear Regression"
+subtitle: "ISL Chapter 3"
+author: "Yerim Oh"
+output: pdf_document
+header-includes:
+   - \usepackage{soul}
+geometry: margin=0.6in
+---
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(eval = TRUE)
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(mosaic)
+```
+
+## Example
+
+The Auto was taken from the StatLib library which is maintained at Carnegie Mellon University. The dataset was used in the 1983 American Statistical Association Exposition. The original dataset has 397 observations, of which 5 have missing values for the variable "horsepower". These rows are removed here.
+
+```{r, echo=FALSE, message = FALSE,fig.height=5, warning = F}
+library(GGally)
+library(ISLR2)
+head(Auto)
+ggpairs(Auto %>% select(mpg, cylinders, weight)) + 
+  theme_bw()
+```
+
+\newpage
+
+### 1. Fit a model for `mpg` using `cylinders`, `weight` as explanatory variables. Print a summary.
+
+```{r}
+model_fit <- lm(mpg ~ cylinders+weight, data = Auto)
+summary(model_fit)
+```
+
+\vspace{18pt}
+
+### 2. Test the hypothesis that `cylinders` is not related to `mpg`.
+
+-   $H_0$: $\beta_{cylinders} = 0$
+
+-   $H_A$: $\beta_{cylinders} \neq 0$
+
+-   t-stat = -2.493
+
+-   p-value = 0.0131
+
+    -   We have strong evidence against the null hypothesis that the cylinders do not affect the miles per gas.
+
+\vspace{18pt}
+
+### 3. Test the hypothesis that `weight` is not related to `mpg`.
+
+-   $H_0$: $\beta_{weight} = 0$
+
+-   $H_A$: $\beta_{weight} \neq 0$
+
+-   t-stat = -10.922
+
+-   p-value = less than 2e-16
+
+    -   We have a very strong evidence against the null hypothesis that the weight does not affect the miles per gas.
+
+\vspace{18pt}
+
+### 4. Test the hypothesis neither `cylinders` or `weight` is related to `mpg`.
+
+-   $H_0$: $\beta_{cylinders} = \beta_{weight} = 0$
+
+-   $H_A$: $\beta_{cylinders} \neq 0$ or $\beta_{weight} \neq 0$; At least one of $\beta_{cylinders}$ or $\beta_{weight}$ is not equal to 0
+
+-   F-stat = 448.4
+
+-   p-value = less than 2.2e-16
+
+    -   We have a very strong evidence against the null hypothesis that neither cylinders or weight is related to mpg.
+
+\vspace{18pt}
+
+### 5. Do your results align with your intuition based on the visualization of the data?
+
+Both variables seem to be related to the `mpg` variable. The conclusions therefore align with the data visualization.

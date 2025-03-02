@@ -1,0 +1,177 @@
+---
+title: "Stepwise Selection - R Code"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ISLR2)
+library(leaps)
+library(GGally)
+library(ggplot2)
+library(gridExtra)
+library(dplyr)
+library(caret)
+library(stringr)
+```
+
+# Stepwise Selection
+
+**Example** Dataset `Hitters` in ISLR2 package. Major League Baseball Data from the 1986 and 1987 seasons.
+
+References James, G., Witten, D., Hastie, T., and Tibshirani, R. (2013) An Introduction to Statistical Learning with applications in R, <https://www.statlearning.com>, Springer-Verlag, New York
+
+## Load and look at the data
+
+```{r, warning=FALSE, message=FALSE, include = F}
+Hitters    <- na.omit(Hitters) # Eliminate all rows with NAs
+Hitters_tr <- Hitters %>% mutate(Years_tr = log(Years),
+                                 CAtBat_tr = log(CAtBat),
+                                 CHits_tr = log(CHits),
+                                 CHmRun_tr = log(CHmRun+1),
+                                 CRuns_tr  = log(CRuns),
+                                 CRBI_tr   = log(CRBI),
+                                 CWalks_tr = log(CWalks),
+                                 Salary_tr = log(Salary))
+Hitters_tr <- Hitters_tr %>% select(!c(Years,CAtBat,CHmRun,CRuns,CRBI,CWalks,Salary))
+```
+
+```{r, warning=FALSE, message=FALSE, fig.height=4.5, echo = FALSE}
+p1 <-  ggplot(Hitters_tr, aes(y = Salary_tr, x = AtBat)) + geom_point() + theme_bw()
+p2 <-  ggplot(Hitters_tr, aes(y = Salary_tr, x = Hits))  + geom_point() + theme_bw()
+p3 <-  ggplot(Hitters_tr, aes(y = Salary_tr, x = HmRun)) + geom_point() + theme_bw()
+p4 <-  ggplot(Hitters_tr, aes(y = Salary_tr, x = Runs))  + geom_point() + theme_bw()
+p5 <-  ggplot(Hitters_tr, aes(y = Salary_tr, x = RBI))   + geom_point() + theme_bw()
+p6 <-  ggplot(Hitters_tr, aes(y = Salary_tr, x = Walks)) + geom_point() + theme_bw()
+p7 <-  ggplot(Hitters_tr, aes(y = Salary_tr, x = Years_tr)) + geom_point() + theme_bw()
+p8 <-  ggplot(Hitters_tr, aes(y = Salary_tr, x = CAtBat_tr)) + geom_point() + theme_bw()
+p9 <-  ggplot(Hitters_tr, aes(y = Salary_tr, x = CHits_tr))   + geom_point() + theme_bw()
+p10 <- ggplot(Hitters_tr, aes(y = Salary_tr, x = CHmRun_tr)) + geom_point() + theme_bw()
+p11 <- ggplot(Hitters_tr, aes(y = Salary_tr, x = CRuns_tr)) + geom_point() + theme_bw()
+p12 <- ggplot(Hitters_tr, aes(y = Salary_tr, x = CRBI_tr)) + geom_point() + theme_bw()
+p13 <- ggplot(Hitters_tr, aes(y = Salary_tr, x = CWalks_tr))   + geom_point() + theme_bw()
+p14 <- ggplot(Hitters_tr, aes(y = Salary_tr, x = League)) + geom_boxplot() + theme_bw()
+p15 <- ggplot(Hitters_tr, aes(y = Salary_tr, x = Division)) + geom_boxplot() + theme_bw()
+p16 <- ggplot(Hitters_tr, aes(y = Salary_tr, x = PutOuts)) + geom_point() + theme_bw()
+p17 <- ggplot(Hitters_tr, aes(y = Salary_tr, x = Assists))   + geom_point() + theme_bw()
+p18 <- ggplot(Hitters_tr, aes(y = Salary_tr, x = Errors)) + geom_point() + theme_bw()
+p19 <- ggplot(Hitters_tr, aes(y = Salary_tr, x = NewLeague)) + geom_boxplot() + theme_bw()
+
+grid.arrange(p1,p2,p3,p4,p5,p6,p7,p8,
+             p9,p10,p11,p12,p13,p14,p15,p16,
+             p17,p18,p19,
+             ncol = 5)
+```
+
+\newpage
+
+## Forward stepwise selection
+
+Here we use the `regsubsets` function but specify the `method="forward"` option.
+
+```{r, warning=FALSE, message=FALSE}
+regfit.fwd <- regsubsets(Salary_tr ~ ., Hitters_tr, nvmax = 19, method = "forward")
+
+```
+
+#### Compare model selection with forward stepwise based on Mallow's Cp and BIC
+
+```{r, warning=FALSE, message=FALSE, fig.align='left', fig.height=4}
+results.fwd <- data.frame(model = seq(1,19),
+                          cp = summary(regfit.fwd)$cp,
+                          bic = summary(regfit.fwd)$bic)
+p_cp <- ggplot(results.fwd, aes(x = model, y = cp)) + 
+  geom_point() + geom_line() + theme_bw() + 
+  geom_point(data = results.fwd[which.min(summary(regfit.fwd)$cp),], 
+                aes(y = cp, x = model), 
+                size = 3, col = "red")
+p_bic <- ggplot(results.fwd, aes(x = model, y = bic)) + 
+  geom_point() + geom_line() + theme_bw() + 
+  geom_point(data = results.fwd[which.min(summary(regfit.fwd)$bic),], 
+                aes(y = bic, x = model), 
+                size = 3, col = "red")
+grid.arrange(p_cp, p_bic, ncol =2)
+```
+
+\newpage
+
+```{r, warning=FALSE, message=FALSE, fig.align='left', fig.height=8}
+par(mfrow=c(2,1))
+plot(regfit.fwd, scale="Cp")
+plot(regfit.fwd, scale="bic")
+```
+
+#### Get coefficients of "Best models"
+
+Based on Cp
+
+```{r}
+# The best model based on Cp is the one with 13 variables
+coef(regfit.fwd, 13)
+```
+
+Based on BIC
+
+```{r}
+# The best model based on BIC is the one with 4 variables
+coef(regfit.fwd, 4)
+```
+
+\newpage
+
+## Backward stepwise selection
+
+Repeat this exercise with the backward stepwise selection. Which model would you pick? Which variables are included in the model? Do you find the same results as with the forward stepwise selection method?
+
+```{r, warning=FALSE, message=FALSE}
+regfit.bwd <- regsubsets(Salary_tr ~ ., Hitters_tr, nvmax = 19, method = "backward")
+```
+
+#### Compare model selection with backward stepwise based on Mallow's Cp and BIC
+
+```{r, warning=FALSE, message=FALSE, fig.align='left', fig.height=4}
+results.bwd <- data.frame(model = seq(1,19),
+                          cp = summary(regfit.bwd)$cp,
+                          bic = summary(regfit.bwd)$bic)
+p_cp <- ggplot(results.bwd, aes(x = model, y = cp)) + 
+  geom_point() + geom_line() + theme_bw() + 
+  geom_point(data = results.bwd[which.min(summary(regfit.bwd)$cp),], 
+                aes(y = cp, x = model), 
+                size = 3, col = "red")
+p_bic <- ggplot(results.bwd, aes(x = model, y = bic)) + 
+  geom_point() + geom_line() + theme_bw() + 
+  geom_point(data = results.bwd[which.min(summary(regfit.bwd)$bic),], 
+                aes(y = bic, x = model), 
+                size = 3, col = "red")
+grid.arrange(p_cp, p_bic, ncol =2)
+```
+
+\newpage
+
+```{r, warning=FALSE, message=FALSE, fig.align='left', fig.height=8}
+par(mfrow=c(2,1))
+plot(regfit.bwd, scale="Cp")
+plot(regfit.bwd, scale="bic")
+```
+
+#### Get coefficients of "Best models"
+
+Based on Cp
+
+```{r}
+# The best model based on Cp is the one with 12 variables
+coef(regfit.bwd, 12)
+```
+
+Based on BIC
+
+```{r}
+# The best model based on BIC is the one with 6 variables
+coef(regfit.bwd, 6)
+```
+
+**Do you find the same results as with the forward stepwise selection method?**
+
+The models selected with the Cp criterion are very similar. The forward stepwise selection has 13 variables and the backward, 12. However, the forward stepwise selection method includes the additional variables `Runs` and `CHits_tr` and does not include the variable `AtBat`.
+
+The models selected with the BIC criterion are also fairly similar. They have a similar number of variables (6 and 4), and have three variables in common, i.e. `PutOuts`, `Years_tr` and `CRBI_tr`.

@@ -1,0 +1,169 @@
+---
+title: "Ridge and Lasso Regression - R Code"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ISLR2)
+library(dplyr)
+library(glmnet)
+library(caret)
+library(leaps)
+```
+
+**Example** Dataset `Hitters` in ISLR2 package. Major League Baseball Data from the 1986 and 1987 seasons.
+
+References James, G., Witten, D., Hastie, T., and Tibshirani, R. (2013) An Introduction to Statistical Learning with applications in R, <https://www.statlearning.com>, Springer-Verlag, New York
+
+## Install package `glmnet`
+
+We will use the package `glmnet` to fit the ridge and lasso regression. Make sure it is installed and loaded.
+
+```{r, include=FALSE}
+library(glmnet)
+set.seed(123)
+```
+
+## Load the data (already looked at the data in previous labs)
+
+```{r, warning=FALSE, message=FALSE}
+Hitters    <- na.omit(Hitters) # Eliminate all rows with NAs
+Hitters_tr <- Hitters %>% mutate(Years_tr = log(Years),
+                                 CAtBat_tr = log(CAtBat),
+                                 CHits_tr = log(CHits),
+                                 CHmRun_tr = log(CHmRun+1),
+                                 CRuns_tr  = log(CRuns),
+                                 CRBI_tr   = log(CRBI),
+                                 CWalks_tr = log(CWalks),
+                                 Salary_tr = log(Salary))
+Hitters_tr <- Hitters_tr %>% select(!c(Years,CAtBat,CHmRun,CRuns,CRBI,CWalks,Salary, CHits,
+                                       League, Division,NewLeague))
+dim(Hitters_tr)
+```
+
+The `glmnet` package does not use the "model formula language" as we are used to with the `lm` function. We need to manually setup an $X$ matrix and a vector for the response variable $Y$
+
+```{r, warning=FALSE, message=FALSE}
+x = model.matrix(Salary_tr~., data = Hitters_tr)
+y = Hitters_tr$Salary_tr
+```
+
+## Ridge regression
+
+First we will fit a ridge-regression model. This is achieved with the `glmnet` function with the argument `alpha = 0`. (`alpha = 1` then a lasso model is fit.)
+
+```{r,fig.height=3.2}
+ridge.fit <- glmnet(x, y, alpha = 0)
+plot(ridge.fit, xvar = "lambda", label = TRUE)
+```
+
+Do the CV step to pick the $\lambda$ parameter. The library `glmnet` has a function `cv.glmnet` that does that for us.
+
+```{r,fig.height=3.5}
+cv.ridge  <- cv.glmnet(x,y, alpha = 0)
+cv.ridge
+plot(cv.ridge)
+```
+
+Fit the model with the selected lambda. Using the function `coef`, find the coefficients for the lasso model fit.
+
+```{r}
+ridge.fit.minlambda <- glmnet(x, y, alpha = 0, lambda = 0.065)
+coef(ridge.fit.minlambda)
+```
+
+## Lasso regression
+
+Now, fit a lasso-regression model.
+
+```{r}
+# Achieved with the `glmnet` function with the argument `alpha = 1`
+lasso.fit <- glmnet(x, y, alpha = 1)
+```
+
+Now plot the coefficients against the log of lambda. What is the maximum number of variables considered in the model as lambda changes? The minimum? How does that compare with the ridge regression?
+
+```{r,fig.height=3.5}
+# Plot the results
+plot(lasso.fit, xvar = "lambda", label = TRUE)
+```
+
+The maximum number of variables is 16 and the minimum is zero. Under the ridge regression, there were always 16 variables included in the model, independently of the value of lambda.
+
+Perform cross validation to pick the $\lambda$ parameter and plot the results (estimated test mse vs log of lambda). Which value of lambda would you pick?
+
+```{r,fig.height=3.5}
+cv.lasso  <- cv.glmnet(x, y, alpha = 1)
+plot(cv.lasso)
+cv.lasso
+```
+
+Using the function `coef`, find the coefficients for the lasso model fit.
+
+```{r}
+coef(cv.lasso)  # by default, the coefficient from the second vertical line
+# coef(lasso.fit) # coefficients for all the lasso fit (all the values of lambda)
+lasso.fit.best <- glmnet(x, y, alpha = 1, lambda = 0.00106)
+coef(lasso.fit.best) #coefficients for the best choice of lambda
+```
+
+## Lasso regression - lambda selected through the validation set approach
+
+Suppose that we now want to use the validation set method to select the lambda for the lasso regression.
+
+#### Set a seed and split the data set into a train and test data.
+
+\textcolor{white}{1}
+
+```{r}
+# Set seed for reproducibility
+set.seed(7304)
+
+#  Divide into training and test sets
+train_inds <- caret::createDataPartition(
+  y = Hitters_tr$Salary_tr, # response variable as a vector
+  p = 0.75       # approx. proportion of data used for training
+)
+
+# Create the training and test data sets
+Hitters_train <- Hitters_tr %>% slice(train_inds[[1]])
+Hitters_test  <- Hitters_tr %>% slice(-train_inds[[1]])
+```
+
+#### Create the x matrix and y vector associated with the train and test data.
+
+\textcolor{white}{1}
+
+```{r}
+x_train       <- model.matrix(Salary_tr~., data = Hitters_train)
+x_test        <- model.matrix(Salary_tr~., data = Hitters_test)
+y_train       <- Hitters_train$Salary_tr
+y_test        <- Hitters_test$Salary_tr
+```
+
+#### Fit the lasso model on the train data and estimate the rmse
+
+\textcolor{white}{1}
+
+```{r}
+lasso.tr      <- glmnet(x_train, y_train)
+pred_test     <- predict(lasso.tr, x_test)
+rmse          <- sqrt(apply((y_test - pred_test)^2,2, mean))
+```
+
+#### Plot the rmse agains the log lambda and find the best choice of lambda
+
+```{r,fig.height=3.5, fig.align='left'}
+plot(log(lasso.tr$lambda), rmse, type = "b", xlab = "log(lambda)")
+lambda.best <- lasso.tr$lambda[order(rmse)][1]
+lambda.best
+```
+
+#### Use your choice of lambda to fit the model with all the data
+
+```{r}
+lambda.best    <- lasso.tr$lambda[order(rmse)][1]
+lasso.fit.best <- glmnet(x, y, alpha = 1, lambda = lambda.best)
+coef(lasso.fit.best)
+```

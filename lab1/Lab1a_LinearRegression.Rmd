@@ -1,0 +1,130 @@
+---
+title: "Lab 1a. Linear Regression"
+subtitle: "ISL Chapter 3"
+author: "Yerim Oh"
+output: pdf_document
+header-includes:
+   - \usepackage{soul}
+geometry: margin=0.6in
+---
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(eval = TRUE)
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(mosaic)
+library(GGally)
+library(ISLR2)
+```
+
+## Example
+
+The Auto was taken from the StatLib library which is maintained at Carnegie Mellon University. The dataset was used in the 1983 American Statistical Association Exposition. The original dataset has 397 observations, of which 5 have missing values for the variable "horsepower". These rows are removed here.
+
+```{r, echo=FALSE, message = FALSE, warning=FALSE ,fig.height=4.5}
+head(Auto)
+ggpairs(Auto %>% select(mpg, cylinders, weight)) + 
+  theme_bw()
+```
+
+\newpage
+
+### 1. Fit a model for `mpg` using `cylinders`, `weight` as explanatory variables. Print a summary.
+
+```{r}
+model_fit <- lm(mpg ~ cylinders + weight, data = Auto)
+summary(model_fit)
+```
+
+\vspace{24pt}
+
+### 2. What model did we fit? Write the model equation. (This model describes the relationships in the \underline{population}.)
+
+$\text{mpg} = \beta_0 - \beta_1 \cdot \text{cylinders} - \beta_2 \cdot \text{weight} + \varepsilon$
+
+-   we should include the error term since the true data does not lie exactly on the line.
+
+\vspace{24pt}
+
+### 3. What is the equation describing the model's estimated mean miles per gallon as a function of the number of cylinders and vehicle weight?
+
+$\hat{y_i} = \hat{\beta_0} - \hat{\beta_1} \cdot x_{i1} - \hat{\beta_2} \cdot x_{i2}$
+
+$\hat{y_i} = 46.2923 - 0.7214 \cdot \text{cylinders} - 0.0063 \cdot \text{weight}$
+
+\vspace{24pt}
+
+### 4. What is the interpretation of the estimated coefficients?
+
+$\hat{\beta_0} = 46.3$: For a car without cylinders weighting 0 lbs, the estimated mean miles per gallon is equal to 46.3. The interpretation of the intercept does not make sense for this question.
+
+$\hat{\beta_1} = -0.72$: For every additional cylinders, the estimated mean miles per gallon decreases by 0.72 **on average** for a constant vehicle weight
+
+$\hat{\beta_2} = -0.0063$: For every additional pound in the car weight, the estimated mean miles per gallon decreases by 0.0063 **on average** for a constant number of cylinders.
+
+\vspace{24pt}
+
+### 5. Find a 95% confidence intervals for the coefficient. What do you conclude?
+
+```{r}
+round(confint(model_fit, level = 0.95), 4)
+```
+
+None of the confidence intervals include zero, thus suggesting that the coefficients are significantly different than zero.
+
+Interpretation for cylinders:
+
+We are 95% confident that the true change in the mean miles per gallon for every additional cylinder is between -1.29 and -0.15 for a constant vehicle weight. By 95% confident we mean that if we were to draw many samples of the same sample size and calculate confidence intervals in the same way, then 95% of the confidence intervals would include the true value this mean change in mpg per cylinder for a constant vehicle weight.
+
+Interpretation for weights:
+
+We are 95% confident that the true change in the mean miles per gallon for every additional pound in the car weight is between -0.0075 and -0.0052 for a constant number of cylinder. By 95% confident we mean that if we were to draw many samples of the same sample size and calculate confidence intervals in the same way, then 95% of the confidence intervals would include the true value this mean change in mpg per pound for a constant cylinder number.
+
+\vspace{24pt}
+
+### 6. Estimate the `mpg` for a car of 4 cylinders weighing 3000 lbs.
+
+$\hat{y} = \hat{\beta_0} - \hat{\beta_1} \cdot 4 - \hat{\beta_2} \cdot 3000$
+
+```{r}
+predict_data <- data.frame(
+  cylinders = 4,
+  weight = 3000
+)
+predict(model_fit, newdata = predict_data)
+```
+
+\vspace{24pt}
+
+### 7. Plot all the residuals against the two explanatory variables (i.e., two plots in total.)
+
+```{r}
+# Add the residuals to the dataset
+Auto <- Auto %>%
+  mutate(res_all = residuals(model_fit))
+
+p1 <- ggplot(Auto, aes(x = cylinders, y = res_all)) +
+  geom_point() +
+  ylab("residuals") +
+  theme_bw()
+p2 <- ggplot(Auto, aes(x = weight, y = res_all)) +
+  geom_point() +
+  ylab("residuals") +
+  theme_bw()
+
+library(gridExtra) # allows to show multiplot plots on the same page
+grid.arrange(p1, p2, ncol = 2)
+```
+
+\vspace{24pt}
+
+### 8. Comment on the appropriateness of the model.
+
+-   constant variance assumption violated (residuals vs. `cylinders`)
+
+-   linear assumption violated (residuals vs. `weight`)
+
+The model does not seem appropriate. The residuals are not randomly distributed around 0 for the weight variable. The relationship between `mpg` and `weight` does not appear to be linear.
+
+\vspace{24pt}

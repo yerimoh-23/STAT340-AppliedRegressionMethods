@@ -1,0 +1,294 @@
+---
+title: "Lab 1e. Linear Regression"
+subtitle: "Multiple Regression and Validation of Assumptions"
+author: "Yerim Oh"
+output: pdf_document
+header-includes:
+   - \usepackage{soul}
+geometry: margin=0.6in
+---
+
+```{r, include=FALSE,message = FALSE}
+library(readr)
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(GGally)
+library(gridExtra)
+library(caret)
+```
+
+## Country Data
+
+We have data on 193 countries, with the following variables recorded (the data were assembled in 2012, so all values are for the countries as of that year):
+
+-   `region`: Region of the world: Africa, Asia, Caribbean, Europe, Latin Amer, North America, NorthAtlantic, Oceania.
+-   `group`: A factor with levels oecd for countries that are members of the OECD, the Organization for Economic Co-operation and Development, as of May 2012, africa for countries on the African continent, and other for all other countries. No OECD countries are located in Africa.
+-   `fertility`: Total fertility rate, number of children per woman.
+-   `ppgdp`: Per capita gross domestic product in US dollars.
+-   `lifeExpF`: Female life expectancy, years.
+-   `pctUrban`: Percent urban.
+-   `infantMortality`: Infant deaths by age 1 year per 1000 live births
+
+Let's develop models to predict `infantMortality` as a function of the other variables.
+
+```{r}
+countries <- read.csv("http://www.cknudson.com/data/UN.csv")
+countries <- countries[,-1]
+countries <- countries %>% drop_na()
+```
+
+\vspace{-12pt}
+
+### 1. Make some exploratory plots of the data.
+
+```{r, message=FALSE, fig.align='left', warning=FALSE}
+ggpairs(countries)
+```
+
+### 2. Fit a model that includes `region` and `group` as explanatory variables and take a look at the summary output. What is going on?
+
+```{r}
+model_fit1 <- lm(infantMortality ~ region + group, countries)
+summary(model_fit1)
+```
+
+The NA estimate is a sign of multicollinearity. Looking back at the variable descriptions, we see that there is an “Africa” level for region and an “africa” level for the group. Those variables contain duplicate information in that case.
+
+```{r}
+group_africa_inds <- which(countries$group == "africa")
+region_africa_inds <- which(countries$region == "Africa")
+identical(group_africa_inds, region_africa_inds)
+```
+
+### 3. Develop a predictive model by transforming the response and/or quantitative explanatory variables so that the associations between the transformed variables are approximately linear. Include just one of `region` and `group` in your model.
+
+#### (a) As a challenge, see if you can make a successful guess about the transformations to use on the first try. Make plots of your transformed variables to see how you're doing. You should feel pretty good about your selected transformations before fitting any models. You only need to keep your final selections for transformations, no need to keep any intermediate steps.
+
+```{r, message=FALSE, fig.align='left', warning=FALSE}
+countries_transformed <- countries %>%
+  transmute(region = region,
+            group = group,
+            log_fertility = log(fertility),
+            log_ppgdp = log(ppgdp),
+            lifeExpF = lifeExpF,
+            pctUrban = pctUrban,
+            sqrt_infantMortality = sqrt(infantMortality))
+
+ggpairs(countries_transformed)
+```
+
+```{r, message=FALSE, fig.align='left', warning=FALSE}
+countries_transformed <- countries %>%
+  transmute(region = region,
+            group = group,
+            log_fertility = log(fertility),
+            log_ppgdp = log(ppgdp),
+            lifeExpF = lifeExpF,
+            pctUrban = pctUrban,
+            log_infantMortality = log(infantMortality))
+
+ggpairs(countries_transformed)
+```
+
+```{r, message=FALSE, fig.align='left', warning=FALSE}
+countries_transformed <- countries %>%
+  transmute(region = region,
+            group = group,
+            log_fertility = log(fertility),
+            log_ppgdp = log(ppgdp),
+            lifeExpF = lifeExpF,
+            pctUrban = pctUrban,
+            infantMortality_0.25 = (infantMortality)^0.25)
+
+ggpairs(countries_transformed)
+```
+
+```{r, message=FALSE, fig.align='left', warning=FALSE}
+countries_transformed <- countries %>%
+  transmute(region = region,
+            group = group,
+            fertility_minus_0.25 = -1/(fertility^0.25),
+            log_ppgdp = log(ppgdp),
+            lifeExpF = lifeExpF,
+            pctUrban = pctUrban,
+            infantMortality_0.25 = (infantMortality)^0.25)
+
+ggpairs(countries_transformed)
+```
+
+-   I don’t think additional transformations of infant mortality can simultaneously improve the relationships with fertility and pctUrban; the heteroskedasticity is kind of going in opposite directions in those two plots. But it’s not too severe in either plot at this point.
+
+-   There is a non-linear relationship between lifeExpF and my transformed infant mortality variable, but the variance of the response is fairly constant across the range of values for lifeExpF. I will handle that non-linearity with a polynomial term in lifeExpF.
+
+#### (b) Fit a model to your transformed data and create a set of diagnostic plots. These should include (i) scatter plots of the residuals vs. each quantitative explanatory variable in the data set (whether or not you included it in your model); (ii) a density plot or histogram of the residuals; and (iii) diagnostic plots of studentized residuals, and leverage. If you see any serious issues, go back to step (a) and try additional transformations. Also check for multicollinearity among the explanatory variables.
+
+```{r}
+lm_fit <- lm(infantMortality_0.25 ~ region +
+               fertility_minus_0.25 +
+               log_ppgdp +
+               poly(lifeExpF, 2, raw = TRUE)  +
+               pctUrban,
+             data = countries_transformed)
+countries_transformed <- countries_transformed %>%
+  mutate(resid = residuals(lm_fit))
+
+# scatter plots of the residuals vs. each quantitative explanatory variable
+sp1 <- ggplot(data = countries_transformed,
+              mapping = (aes(x = resid, color = region)))+
+  geom_density()
+sp2 <- ggplot(data = countries_transformed,
+              mapping = (aes(x = resid, color = group)))+
+  geom_density()
+sp3 <- ggplot(data = countries_transformed,
+              mapping = (aes(x = fertility_minus_0.25, y = resid)))+
+  geom_point()
+sp4 <- ggplot(data = countries_transformed,
+              mapping = (aes(x = log_ppgdp, y = resid)))+
+  geom_point()
+sp5 <- ggplot(data = countries_transformed,
+              mapping = (aes(x = lifeExpF, y = resid)))+
+  geom_point()
+sp6 <- ggplot(data = countries_transformed,
+              mapping = (aes(x = pctUrban, y = resid)))+
+  geom_point()
+sp7 <- ggplot(data = countries_transformed, mapping = (aes(x = resid)))+
+  geom_density()
+
+grid.arrange(sp1, sp2, sp3, sp4, sp5, sp6, sp7, ncol=2)
+
+# diagnostic plots of studentized residuals, and leverage
+car::influenceIndexPlot(lm_fit,
+                        vars = c("Studentized", "hat"))
+2 * length(coef(lm_fit)) / nrow(countries_transformed)# leverage ("hat-values")
+```
+
+Observations 24 and 153 show high leverage. Let’s look at plots to see if we’re worried:
+
+```{r}
+countries_transformed$high_leverage <- "No"
+countries_transformed$high_leverage[c(24, 153)] <- "Yes"
+p1 <- ggplot(data = countries_transformed,
+             mapping = aes(x = fertility_minus_0.25,
+                           y = infantMortality_0.25,
+                           color = high_leverage)) +
+  geom_point()
+p2 <- ggplot(data = countries_transformed,
+             mapping = aes(x = log_ppgdp,
+                           y = infantMortality_0.25,
+                           color = high_leverage)) +
+  geom_point()
+p3 <- ggplot(data = countries_transformed,
+             mapping = aes(x = lifeExpF,
+                           y = infantMortality_0.25,
+                           color = high_leverage)) +
+  geom_point()
+p4 <- ggplot(data = countries_transformed,
+             mapping = aes(x = pctUrban,
+                           y = infantMortality_0.25,
+                           color = high_leverage)) +
+  geom_point()
+grid.arrange(p1, p2, p3, p4)
+```
+
+Not particularly worried.
+
+```{r}
+lm_fit_no_high_leverage <- lm(infantMortality_0.25 ~ region +
+                                fertility_minus_0.25 +
+                                log_ppgdp +
+                                poly(lifeExpF, 2, raw = TRUE) +
+                                pctUrban,
+                              data = countries_transformed %>%
+                                filter(high_leverage == "No"))
+
+summary(lm_fit)
+summary(lm_fit_no_high_leverage)
+```
+
+There are essentially no differences between the model fits with and without the high leverage observations. Not worried at all.
+
+#### (c) Take a look at the summary output for your chosen model. Which variables would hypothesis tests suggest have a strong relationship with infant mortality rates?
+
+```{r}
+summary(lm_fit)
+```
+
+There is fairly strong evidence of an association between fertility, ppgdp, and lifeExpF and infant mortality rates. We have to conduct an F test to investigate region:
+
+```{r}
+reduced_fit <- lm(infantMortality_0.25 ~ fertility_minus_0.25 +
+                    log_ppgdp +
+                    poly(lifeExpF, 2, raw = TRUE) +
+                    pctUrban,
+                  data = countries_transformed)
+                         
+anova(reduced_fit, lm_fit)
+```
+
+A hypothesis test says region is important too. Basically the only variable a hypothesis test says we could drop is `pctUrban`.
+
+### 4. Develop a predictive model by including polynomial terms in any explanatory variables that have a non-linear relationship with the response. You should not use any transformations of the explanatory or response variables for this model.
+
+#### (a) Fit your selected model to the data and create the same diagnostic plots you made for your model in part 3(b). You will not be able to solve problems with non-constant variance of the residuals (heteroskedasticity), but the residual diagnostic plots should show no signs of non-linearities that are not captured in your model.
+
+```{r}
+lm_fit2 <- lm(infantMortality ~ region +
+                fertility +
+                poly(ppgdp, 2, raw = TRUE) +
+                lifeExpF +
+                poly(pctUrban, 2, raw = TRUE),
+              data = countries)
+countries <- countries %>%
+  mutate(resid = residuals(lm_fit2))
+
+# scatter plots of the residuals vs. each quantitative explanatory variable
+sp1 <- ggplot(data = countries, mapping = (aes(x = resid, color = region)))+
+  geom_density()
+sp2 <- ggplot(data = countries, mapping = (aes(x = resid, color = group)))+
+  geom_density()
+sp3 <- ggplot(data = countries, mapping = (aes(x = fertility, y = resid)))+
+  geom_point()
+sp4 <- ggplot(data = countries, mapping = (aes(x = ppgdp, y = resid)))+
+  geom_point()
+sp5 <- ggplot(data = countries, mapping = (aes(x = lifeExpF, y = resid)))+
+  geom_point()
+sp6 <- ggplot(data = countries, mapping = (aes(x = pctUrban, y = resid)))+
+  geom_point()
+sp7 <- ggplot(data = countries, mapping = (aes(x = resid)))+
+  geom_density()
+
+grid.arrange(sp1, sp2, sp3, sp4, sp5, sp6, sp7, ncol=2)
+
+# diagnostic plots of studentized residuals, and leverage
+car::influenceIndexPlot(lm_fit2,
+                        vars = c("Studentized", "hat"))
+2 * length(coef(lm_fit2)) / nrow(countries)# leverage ("hat-values")
+```
+
+There are clear problems, but this is about as good as you can do without using transformations.
+
+#### (b) Take a look at the summary output for your chosen model. Which variables would hypothesis tests suggest have a strong relationship with infant mortality rates?
+
+```{r}
+summary(lm_fit2)
+```
+
+Neither of the terms for ppgdp are showing up as statistically significant according to individual t tests. Again, we really need an F test:
+
+```{r}
+lm_fit2a <- lm(infantMortality ~ region +
+                 fertility +
+                 lifeExpF +
+                 poly(pctUrban, 2, raw = TRUE),
+               data = countries)
+anova(lm_fit2a, lm_fit2)
+```
+
+-   The F test does not indicate strong evidence of a relationship between `ppgdp` and `infantMortality` rates, after accounting for the effects of `region`, `fertility`, `lifeExpF`, and `pctUrban`.
+
+-   But note we can’t trust this F test! The conditions are not satisfied and F tests are particularly sensitive to the conditions.
+
+### 5. Are your hypothesis test results consistent between the models you developed in parts 3 and 4? Which model would you prefer if you had to conduct some hypothesis tests about which variables have a strong association with infant mortality rates? Why?
+
+No. My model with transformations provided strong evidence of a relationship between ppgdp and infant mortality rates after accounting for the other covariates, but the model without transformations did not. The hypothesis tests from the model without transformations cannot be trusted because the conditions for inference were not satisfied.

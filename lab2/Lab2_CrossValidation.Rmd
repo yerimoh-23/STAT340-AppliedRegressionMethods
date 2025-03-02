@@ -1,0 +1,238 @@
+---
+title: "Lab2. Cross Validation"
+name: "Yerim Oh"
+output: pdf_document
+date: "2024-10-9"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r packages, warning =FALSE, message = FALSE, include = FALSE}
+# Load packages we will need
+library(caret)
+library(ISLR)
+library(ggplot2)
+library(dplyr)
+library(gridExtra)
+library(modelr)
+library(purrr)
+```
+
+# Read in data and take a look
+
+```{r load data}
+cars <- Auto  # data loaded in the ISLR package
+head(cars,3)  # take a look
+```
+
+# Validation-set approach
+
+## Step 1: Getting a train/test split.
+
+```{r training testing sets}
+# Set seed for reproducibility
+set.seed(7304) # generated at random.org
+
+#  Divide into training and test sets
+train_inds <- caret::createDataPartition(
+  y = cars$mpg, # response variable as a vector
+  p = 0.5       # approx. proportion of data used for training
+)
+
+# train_inds: indices of selected observations for training set
+head(train_inds)
+
+# Create the training and test data sets
+cars_train <- cars %>% slice(train_inds[[1]])
+cars_test  <- cars %>% slice(-train_inds[[1]])
+```
+
+## Summary of what we've achieved so far:
+
+```{r, fig.height=3.5}
+# number of observations in each data sets
+nrow(cars)
+nrow(cars_train)
+nrow(cars_test)
+
+# plot of the data
+ggplot() +
+  geom_point(data = cars_train, 
+             mapping = aes(x = weight, y = mpg), 
+             color = "magenta4", shape = 18, size =2) +
+  geom_point(data = cars_test, 
+             mapping = aes(x = weight, y = mpg), 
+             color = "blue", shape = 4, size =2) +
+  theme_bw()
+```
+
+\newpage
+
+## Step 2: Fit all candidate models to the training data and compare performance on test data.
+
+Here, we get validation set MSE for each candidate model:
+
+```{r}
+results_mse <- data.frame(
+  poly_degree = seq_len(7),
+  train_mse = NA,
+  test_mse = NA
+)
+
+for(degree in seq_len(7)) {
+  
+  # fit to training set
+  fit <- lm(mpg ~ poly(weight, degree), data = cars_train)
+
+  # by default, predictions are for training set
+  # get residuals and mse for training set
+  train_resids <- cars_train$mpg - predict(fit)
+  results_mse$train_mse[degree] <- mean(train_resids^2)
+  
+  # get residuals and mse for test set
+  test_resids <- cars_test$mpg - predict(fit, cars_test) 
+  results_mse$test_mse[degree] <- mean(test_resids^2)
+}
+```
+
+## Here's a plot of the results:
+
+```{r, fig.height=3.5}
+# Code to find the limits of the y axis (not required)
+mse_all   <- c(results_mse$train_mse,results_mse$test_mse)
+plot_ylim <- c(floor(min(mse_all)*4)/4, ceiling(max(mse_all)*4)/4)
+
+# Make plots of the results!
+p1 <- ggplot(data = results_mse, 
+       mapping = aes(x = poly_degree, y = test_mse)) +
+  geom_line(color="blue") +
+  geom_point(color="blue") + 
+  ylim(plot_ylim) + 
+  theme_bw()
+
+p2 <- ggplot(data = results_mse, 
+       mapping = aes(x = poly_degree, y = train_mse)) +
+  geom_line(color="blue") + geom_point(color="blue") + 
+  ylim(plot_ylim) + 
+  theme_bw()
+  
+grid.arrange(p1,p2,ncol= 2)
+```
+
+\vspace{12pt}
+
+#### Which model would you prefer based on this analysis? Are the shape of these plots aligned with your understanding?
+
+\vspace{36pt}
+
+# 2. k-fold Cross-Validation
+
+## Step 1: Split into training and test sets, obtain validation folds
+
+```{r}
+# Set seed for reproducibility
+set.seed(7304) # generated at random.org
+
+# Generate partition of the 5 folds
+# The result is a list of length 5 with indices of observations to include in each fold.
+num_crossval_folds <- 5
+cross_fold_inds <- caret::createFolds(
+  y = cars$mpg,    # response variable as a vector
+  k = num_crossval_folds # number of folds for CV
+)
+```
+
+## Step 2: Get performance for each fold, using the other folds put together as a training set.
+
+```{r}
+# Object to store the results
+results_mse <- expand.grid(
+  poly_degree = seq_len(7),
+  fold_num    = seq_len(num_crossval_folds),
+  train_mse   = NA,
+  test_mse    = NA
+)
+# For loops: 
+#    7 polynomial degrees (outside loop)
+#    5 model fits for the 5 folds (inside loop)
+
+for(poly_degree in seq_len(7)) { # degrees
+  for(fold_num in seq_len(num_crossval_folds)) { # folds
+    
+    # Index where to store results
+    results_index <- which(
+      results_mse$poly_degree == poly_degree &
+      results_mse$fold_num    == fold_num
+    )
+    
+    # Training and testing sets (depends on the fold)
+    cars_train <- cars %>% slice(-cross_fold_inds[[fold_num]])
+    cars_test  <- cars %>% slice(cross_fold_inds[[fold_num]])
+    
+    # Fit model to training data (depends on the degree)
+    fit <- lm(mpg ~ poly(weight, poly_degree), data = cars_train)
+
+    # Get training set MSE
+    train_resids <- cars_train$mpg - predict(fit)
+    results_mse$train_mse[results_index] <- mean(train_resids^2)
+    # Get testing set MSE
+    test_resids  <- cars_test$mpg - predict(fit, cars_test)
+    results_mse$test_mse[results_index]  <- mean(test_resids^2)
+  }
+}
+head(results_mse)
+```
+
+```{r}
+# summarize the results from cross validation
+# need to take the average mse for the k folds
+summarized_crossval_mse_results <- results_mse %>%
+  group_by(poly_degree) %>%
+  summarize(
+    crossval_mse = mean(test_mse)
+  )
+summarized_crossval_mse_results
+```
+
+These results suggest that polynomials of degree 2 to 5 and 7, have similar performance.
+
+## Using pre-built code from R
+
+```{r}
+
+# write our own function to add the predictions to the data set
+get_pred  <- function(model, test_data){
+  data  <- as.data.frame(test_data)
+  pred  <- add_predictions(data, model)
+  return(pred)
+}
+#Create the cross validation folds
+cv       <- crossv_kfold(cars, k = 5)
+MSE_models <- rep(NA, 7)
+
+for (poly_degree in seq_len(7)){
+  # fit the model to the k-1 training folds
+  model_fit  <- map(cv$train, 
+                    ~lm(mpg ~ poly(weight,poly_degree),data = .))
+  
+  # get predictions for the testing fold
+  pred_test  <- map2_df(model_fit, cv$test, get_pred, .id = "Run")
+  
+  #Get MSE for each k folds
+  MSE_test   <- pred_test %>% group_by(Run) %>% 
+    summarise(MSE = mean( (mpg - pred)^2))
+  
+  #Store the results
+  MSE_models[poly_degree] <- mean(MSE_test$MSE)
+  
+}
+summarize_results <- data.frame(poly_degree = seq_len(7), 
+                                MSE = MSE_models)
+summarize_results
+```
+
+# 3. Leave-One-Out Cross-Validation
+
+#### How could you implement the leave-one-out CV method?
